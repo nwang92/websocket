@@ -13,6 +13,9 @@ import (
 	"os"
 	"os/signal"
 	"time"
+	"strconv"
+	"fmt"
+	"strings"
 
 	"github.com/gorilla/websocket"
 )
@@ -41,11 +44,16 @@ func main() {
 		defer close(done)
 		for {
 			_, message, err := c.ReadMessage()
+			now := time.Now()
 			if err != nil {
-				log.Println("read:", err)
+				log.Println("read error:", err)
 				return
 			}
-			log.Printf("recv: %s", message)
+			s := strings.Split(string(message), "@")
+			ts_string := strings.TrimSpace(s[1])
+			ts, _ := strconv.ParseInt(ts_string, 10, 64)
+			log.Printf("recv ping at %d: %s", now.UnixNano(), message)
+			log.Printf("    - difference in time is %d nanoseconds", now.UnixNano()-ts)
 		}
 	}()
 
@@ -57,9 +65,10 @@ func main() {
 		case <-done:
 			return
 		case t := <-ticker.C:
-			err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
+			msg := fmt.Sprintf("writing ping @ %s", strconv.FormatInt(time.Now().UnixNano(), 10))
+			err := c.WriteMessage(websocket.TextMessage, []byte(msg))
 			if err != nil {
-				log.Println("write:", err)
+				log.Println("write error:", err, t.String())
 				return
 			}
 		case <-interrupt:
@@ -69,7 +78,7 @@ func main() {
 			// waiting (with timeout) for the server to close the connection.
 			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
-				log.Println("write close:", err)
+				log.Println("write close error:", err)
 				return
 			}
 			select {
